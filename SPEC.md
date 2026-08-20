@@ -17,14 +17,19 @@ GitHub's IP ranges.
 2. The player who *did not* name the category answers first.
 3. Players alternate naming one item per turn.
 4. Answers are **auto-approved**. There is no validation gate — honor system.
-5. Either player may **strike** their opponent's most recent answer, for one of
-   two reasons:
+5. Either player may **strike** the most recent active answer — whoever wrote
+   it — for one of two reasons:
    - **Challenge** — "I don't think that's real / that doesn't fit."
    - **Repeat** — "You already said that."
    A strike is not a loss. The struck answer is removed from play and the player
    who wrote it simply **answers again**.
-6. A player may also strike **their own** most recent answer (a withdrawal), with
-   the same effect.
+6. Striking your opponent's answer is a **challenge**; striking your own is a
+   **withdrawal**. Both have the same effect, and the difference is derived
+   from who wrote what, so no extra bookkeeping is needed.
+
+   Only the single newest active answer can be struck. Allowing strikes against
+   older answers would leave turn order undefined once play had moved past
+   them; catching a repeat late is what the `say` channel is for.
 7. **The only way to lose a round is to resign.** When a player passes, the round
    ends and the opponent scores a point.
 8. **No clock.** There is no time pressure at any point.
@@ -63,8 +68,11 @@ rather than caught:
 
 - Normalize: lowercase, strip punctuation and diacritics, drop leading articles
   (`the`, `a`, `an`), collapse whitespace.
-- Compare against every active answer in the round by Levenshtein distance ≤ 2,
-  so `Massachussets` trips against `Massachusetts`.
+- Compare against every active answer in the round by Levenshtein distance,
+  with the threshold scaled to length: 0 edits at ≤ 4 characters, 1 at ≤ 7,
+  2 beyond. So `Massachussets` trips against `Massachusetts`, while `Mali`
+  does not collide with `Bali`. A flat threshold of 2 is far too loose on
+  short words, which is precisely where trivia answers cluster.
 - On a hit, warn and require confirmation — never hard-block, since a category
   may legitimately contain near-identical items.
 
@@ -133,7 +141,8 @@ github.com as well as in the app. Four event types:
 `say` is free-text chat that does not affect game state — it keeps the log
 feeling like a conversation rather than a bare move list, and covers the
 honor-system cases the formal rules don't (e.g. catching a repeat several turns
-after the fact).
+after the fact). It is available at any time, including while waiting on the
+other player, since chat is not a move.
 
 Author and timestamp come from the comment itself; no need to duplicate them
 into the payload.
@@ -153,6 +162,17 @@ empty log                 -> turn belongs to whoever did not name the category
 ```
 
 A strike is *unresolved* until its author posts a replacement `answer`.
+
+### Score
+
+A finished round is immutable, so its outcome is cached in `localStorage` by
+issue number and never re-fetched. Without that cache, rendering a running
+score would mean pulling the complete log of every game ever played on each
+load. Rounds still in progress are always read fresh.
+
+A closed issue with no resignation in its log — someone closed it by hand on
+github.com — is reported as `Ended` rather than being credited to either
+player.
 
 ### Concurrency
 
